@@ -1,35 +1,15 @@
-from flask import Flask, request, jsonify
-import os
+from fastapi import FastAPI
+from pydantic import BaseModel
 
-app = Flask(__name__)
-API_KEY = os.getenv("OSS_API_KEY", "")
+app = FastAPI()
 
-def ok(): return jsonify({"ok": True})
-
-@app.get("/health")
-def health():
-    return ok(), 200
-
-def authed():
-    return request.headers.get("X-API-Key", "") == API_KEY
-
-def do_think(payload):
-    text = (payload or {}).get("text", "")
-    # 這裡放真正的思考/規劃邏輯；先回 echo
-    return {"result": f"brain got: {text}"}
+class ThinkRequest(BaseModel):
+    text: str
 
 @app.post("/think")
-def think():
-    if not authed():
-        return jsonify({"error":"unauthorized"}), 401
-    return jsonify(do_think(request.get_json(silent=True))), 200
+def think(req: ThinkRequest):
+    return {"reply": f"大腦收到: {req.text}"}
 
-# 相容機器人目前可能呼叫的 /run
-@app.post("/run")
-def run_compat():
-    if not authed():
-        return jsonify({"error":"unauthorized"}), 401
-    return jsonify(do_think(request.get_json(silent=True))), 200
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+@app.get("/")
+def root():
+    return {"status": "大腦正常運行中"}
