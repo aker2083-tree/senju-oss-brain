@@ -1,49 +1,35 @@
-from fastapi import FastAPI, Header, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
+from flask import Flask, request, jsonify
+import os
 
-APP_KEY = ""  # 會從環境變數覆寫
+app = Flask(__name__)
+API_KEY = os.getenv("OSS_API_KEY", "")
 
-app = FastAPI(title="Senju OSS Brain", version="0.1")
-
-class Task(BaseModel):
-    user_id: Optional[str] = None
-    intent: str
-    context: Optional[dict] = None
-
-class PlanStep(BaseModel):
-    action: str              # 交給「手」的動作名稱，例如: "send_telegram", "fetch_url", "binance_order"
-    params: dict             # 動作參數
-    when: str = "now"        # now / after / schedule
-
-class Plan(BaseModel):
-    steps: List[PlanStep]
-
-def check_key(x_api_key: Optional[str]):
-    from os import getenv
-    if x_api_key is None or x_api_key != getenv("OSS_API_KEY", ""):
-        raise HTTPException(status_code=401, detail="Invalid API key")
+def ok(): return jsonify({"ok": True})
 
 @app.get("/health")
 def health():
-    return {"ok": True}
+    return ok(), 200
 
-@app.post("/think/plan", response_model=Plan)
-def think_plan(task: Task, x_api_key: Optional[str] = Header(None)):
-    check_key(x_api_key)
+def authed():
+    return request.headers.get("X-API-Key", "") == API_KEY
 
-    # 這裡可以接 LLM 做更聰明的規劃；先給最小可用策略範例
-    intent = task.intent.lower()
+def do_think(payload):
+    text = (payload or {}).get("text", "")
+    # 這裡放真正的思考/規劃邏輯；先回 echo
+    return {"result": f"brain got: {text}"}
 
-    if "weather" in intent:
-        return Plan(steps=[
-            PlanStep(action="fetch_url", params={"url": "https://wttr.in/?format=3"}),
-            PlanStep(action="reply_user", params={"channel": "telegram"})
-        ])
-    if "binance" in intent or "下單" in intent:
-        return Plan(steps=[
-            PlanStep(action="binance_order", params={"symbol": "BTCUSDT", "side": "BUY", "qty": 0.001}),
-            PlanStep(action="reply_user", params={"channel": "telegram"})
-        ])
-    # 預設丟給千手秘手部的「轉述回覆」
-    return Plan(steps=[PlanStep(action="reply_user", params={"channel": "telegram", "text": f"收到任務：{task.intent}"})])
+@app.post("/think")
+def think():
+    if not authed():
+        return jsonify({"error":"unauthorized"}), 401
+    return jsonify(do_think(request.get_json(silent=True))), 200
+
+# 相容機器人目前可能呼叫的 /run
+@app.post("/run")
+def run_compat():
+    if not authed():
+        return jsonify({"error":"unauthorized"}), 401
+    return jsonify(do_think(request.get_json(silent=True))), 200
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
