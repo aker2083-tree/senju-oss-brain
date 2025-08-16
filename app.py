@@ -1,15 +1,16 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-app = FastAPI()
+app = FastAPI(title="Senju OSS Brain")
 
 class ThinkRequest(BaseModel):
     text: str
 
+@app.get("/")
+def health():
+    return {"status": "ok", "service": "senju-oss-brain"}
+
 @app.post("/think")
 def think(req: ThinkRequest):
-    return {"reply": f"大腦收到: {req.text}"}
-
-@app.get("/")
-def root():
-    return {"status": "大腦正常運行中"}
+    # 這裡先回聲，之後要接真正的思考邏輯再擴充
+    return {"reply": f"大腦收到：{req.text}"}
